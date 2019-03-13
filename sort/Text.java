@@ -9,7 +9,8 @@ public class Text {
 //        insertsort(SortHelper.copyArray(data));
 //        binarySort(SortHelper.copyArray(data));
 //        selectSort(SortHelper.copyArray(data));
-        mergeSort(data);
+//        mergeSort(data);
+        quickSort(data);
         SortHelper.printArray(data);
     }
 
@@ -131,7 +132,40 @@ public class Text {
         }
         mergeInternal(array,0,n-1);
     }
-    public static void mergeInternal(int[] array, int low, int high) {
+
+    public static void quickSort(int[] array) {
+        int n = array.length;
+        if(n <=1 ) {
+            return;
+        }
+        quickSortInternal(array,0,n-1);
+    }
+
+
+    public static void quickSortInternal(int[] array,int l,int r) {
+        if(l >= r) {
+            return;
+        }
+        int q = partition(array,l,r);
+
+        quickSortInternal(array,l,q-1);
+        quickSortInternal(array,q+1,r);
+
+    }
+    private static int partition(int[] array,int l,int r) {
+        int value = array[l];
+        int j = l;
+        int i = l+1;
+        for(;i <= r;i++) {
+            if(array[i] < value) {
+                swap(array,i,j+1);
+                j++;
+            }
+        }
+        swap(array,l,j);
+        return j;
+    }
+    private static void mergeInternal(int[] array, int low, int high) {
         if(low >= high) {
             return;
         }
@@ -172,6 +206,11 @@ public class Text {
         for(i = 0;i < r-p+1; i++) {
             array[p+i] = temp[i];
         }
+    }
+    private static void swap(int[] array,int indexA,int indexB) {
+        int temp = array[indexA];
+        array[indexA] = array[indexB];
+        array[indexB] = temp;
     }
 }
 
