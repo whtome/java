@@ -26,6 +26,8 @@ class MyClass implements IMessage,INews {}
 //}
 //class ComputerFactory {
 //    public static IComputer getInstance(String computerClass) {
+
+//        用反射实现
 //        try {
 //            Class<?> cls = Class.forName(computerClass);
 //            IComputer computer = (IComputer) cls.newInstance();
@@ -39,7 +41,7 @@ class MyClass implements IMessage,INews {}
 //        }
 //        return null;
 
-
+//         简单工厂
 //        if (computerName.equals("mac")) {
 //            return new Macbook();
 //        }else if (computerName.equals("surface")) {
@@ -59,7 +61,7 @@ public class test {
         }
 //        System.out.println(cls.getSuperclass());
 
-
+//        工厂客户端
 //        IComputer computer = ComputerFactory.getInstance("www.bit.Macbook");
 //        computer.buyComputer();
 
