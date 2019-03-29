@@ -54,10 +54,17 @@ class MyClass implements IMessage,INews {}
 
 public class test {
     public static void main(String[] args) {
-        Class<test> cls = test.class;
-        Class[] classes = MyClass.class.getInterfaces();
-        for(Class cls1 : classes) {
-            System.out.println(cls1);
+        public static void main (String[]args){
+            Class<test> cls = test.class;
+            //取得包名称
+            System.out.println(cls.getPackage().getName());
+            //取得父类名称
+            System.out.println(cls.getSuperclass().getName());
+            //取得实现的父接口对象
+            Class[] classes = MyClass.class.getInterfaces();
+            for (Class cls1 : classes) {
+                System.out.println(cls1.getName());
+            }
         }
 //        System.out.println(cls.getSuperclass());
 
