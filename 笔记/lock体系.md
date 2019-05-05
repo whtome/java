@@ -540,3 +540,217 @@ protected final boolean tryAcquire(int acquires) {
 3.3 写锁的降级：
 
 写锁可以降级为读锁，但是读锁不能升级为写锁
+
+
+
+4. Condition的await与signal   等待/通知机制
+
+Object的wait与notify是与内建锁（对象监视器）搭配使用，完成线程的等待与通知机制。
+
+Condition的await，signal是与Lock体系配合实现线程的等待与通知，Java语言层面实现，具有更高的控制与扩展性。
+
+Condition有一下三个独有特性：
+
+a. Condition await支持不响应中断，而Object wait只有一个等待队列
+
+b. Condition支持多个等待队列，而Object wait只有一个等待队列
+
+c. Condition支持设置截至时间，而Object wait只支持设置超时时间
+
+
+
+等待方法await
+
+i. void await() throws InterruptedException；（同wait()）
+
+ii. void awaitUninterruptibly()；  特性1，等待过程中不响应中断
+
+iii. boolean await(long time, TimeUnit unit) throws InterruptedException；
+
+在i的基础上增加了超时等待功能，可以自定义时间单位。
+
+iiii. boolean awaitUntil(Date deadline) throws InterruptedException;
+
+特性3，支持设置截至时间
+
+
+
+唤醒方法signal，signalAll()
+
+
+
+4.1 Condition等待队列
+
+Condition对立与AQS中的同步队列共享节点（Node）数据结构
+
+带有头尾指针的单向队列
+
+每当调用lock.newCondition()就会在绑定的lock锁上新增一个等待队列。（特性2）
+
+实现场景：使用Condition实现有界队列
+
+
+
+4.2 await实现原理
+
+```
+public final void await() throws InterruptedException {
+    //判断中断
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    //将当前线程封装为Node节点后入等待队列
+    Node node = addConditionWaiter();
+    //释放拿到的同步状态
+    int savedState = fullyRelease(node);
+    int interruptMode = 0;
+    while (!isOnSyncQueue(node)) {  
+        //当线程不在同步队列后将其阻塞，置为WAIT状态
+        LockSupport.park(this);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+    }
+    //在同步队列中排队获取锁
+    if (acquireQueued(node, savedState) && interruptMode != THROW_IE)
+        interruptMode = REINTERRUPT;
+    if (node.nextWaiter != null) // clean up if cancelled
+        unlinkCancelledWaiters();
+    if (interruptMode != 0)
+        reportInterruptAfterWait(interruptMode);
+}
+```
+
+如何将当前线程插入等待队列  addConditionWaiter();
+
+```
+private Node addConditionWaiter() {
+    Node t = lastWaiter;
+    // If lastWaiter is cancelled, clean out.
+    if (t != null && t.waitStatus != Node.CONDITION) {
+        //清空所有等待队列中状态不为Condition的节点
+        unlinkCancelledWaiters();
+        //将最新的尾节点赋值
+        t = lastWaiter;
+    }
+    //将当前线程包装为Node节点且状态为Condition
+    Node node = new Node(Thread.currentThread(), Node.CONDITION);
+    if (t == null)
+        firstWaiter = node;
+    else
+        t.nextWaiter = node;
+    //尾插入等待队列
+    lastWaiter = node;
+    return node;
+}
+```
+
+将线程包装为Node节点尾插入等待队列后，线程释放锁过程fullyRelease()
+
+```
+final int fullyRelease(Node node) {
+    boolean failed = true;
+    try {
+        //获取当前同步状态
+        int savedState = getState();
+        //调用release方法释放同步状态
+        if (release(savedState)) {
+            failed = false;
+            return savedState;
+        } else {
+            throw new IllegalMonitorStateException();
+        }
+    } finally {
+        //若在释放过程中出现异常，将当前节点取消
+        if (failed)
+            node.waitStatus = Node.CANCELLED;
+    }
+}
+```
+
+线程如何能从await()方法中退出?
+
+    while (!isOnSyncQueue(node)) {  
+        //阻塞在此处
+        LockSupport.park(this);
+        if ((interruptMode = checkInterruptWhileWaiting(node)) != 0)
+            break;
+    }
+i. 在等待时被中断，通过break退出循环。
+
+ii. 被唤醒后置入同步队列，退出循环。
+
+
+
+4.4  signal实现原理
+
+```
+public final void signal() {
+    if (!isHeldExclusively())
+        throw new IllegalMonitorStateException();
+    //拿到当前等待队列的头节点
+    Node first = firstWaiter;
+    if (first != null)
+        //唤醒头结点
+        doSignal(first);
+}
+```
+
+```
+private void doSignal(Node first) {
+    do {
+        if ( (firstWaiter = first.nextWaiter) == null)
+            lastWaiter = null;
+        //将头节点从等待队列中移除
+        first.nextWaiter = null;
+      //transferForSignal()方法对头结点做
+    } while (!transferForSignal(first) &&
+             (first = firstWaiter) != null);
+}
+```
+
+
+
+5. LockSupport
+
+在之前介绍AQS的底层实现，以及在介绍线程间等待/通知机制使用的Condition时都会调用LockSupport.park()方法和LockSupport.unpark()方法。而这个在同步组件的实现中被频繁使用的LockSupport到底是何方神圣，现在就来看看。
+
+LockSupport位于java.util.concurrent.locks包下。
+LockSupprot是线程的阻塞原语，用来阻塞线程和唤醒线程。每个使用LockSupport的线程都会与一个许可关联，如果该许可可用，并且可在线程中使用，则调用park()将会立即返回，否则可能阻塞。如果许可尚不可用，则可以调用unpark 使其可用。但是注意许可不可重入，也就是说只能调用一次park()方法，否则会一直阻塞。
+
+
+
+阻塞线程：
+
+1. void park()：阻塞当前线程，如果调用unpark方法或者当前线程被中断，从能从park()方法中返回
+2. void park(Object blocker)：功能同方法1，入参增加一个Object对象，用来记录导致线程阻塞的阻塞对象，方便进行问题排查；
+3. void parkNanos(long nanos)：阻塞当前线程，最长不超过nanos纳秒，增加了超时返回的特性；
+4. void parkNanos(Object blocker, long nanos)：功能同方法3，入参增加一个Object对象，用来记录导致线程阻塞的阻塞对象，方便进行问题排查；
+5. void parkUntil(long deadline)：阻塞当前线程，知道deadline；
+6. void parkUntil(Object blocker, long deadline)：功能同方法5，入参增加一个Object对象，用来记录导致线程阻塞的阻塞对象，方便进行问题排查；
+
+
+
+唤醒线程：
+
+void unpark(Thread thread):唤醒处于阻塞状态的指定线程
+
+
+
+与内建锁的阻塞唤醒区别：
+
+内建锁阻塞进入BLOCKED
+
+LockSupport.park()进入WAIT
+
+唤醒：
+
+内建锁有JVM随机挑选一个线程唤醒
+
+LockSupport.unPark(Thread thread)唤醒指定线程
+
+
+
+6. 死锁
+
+死锁产生原因：对共享资源的上锁成环
+
+死锁解决算法：银行家算法
