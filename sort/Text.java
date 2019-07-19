@@ -59,13 +59,14 @@ public class Text {
                 for(; j >= 0; j--) {
                     if(array[j] > value) {
                         array[j+1] = array[j];
+                        array[j] = value;
                     }
 //                    else{
 //                        break;    //这三行代码加上，耗时比折半查找少
 //                    }
                 }
                 //找到要插入的位置
-                array[j+1] = value;
+//                array[j+1] = value;
             }
         }
         long end = System.currentTimeMillis();
